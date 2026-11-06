@@ -7,44 +7,23 @@ except Exception:
     webview = None
 
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
-W = {'main': None}
-BR = {'step': 0, 'oracle': ''}
-MAILH = ('google.', 'gmail', 'outlook', 'live.com', 'office.com', 'microsoft', 'yahoo', 'proton', 'icloud')
+W = {'main': None, 'web': None}
 LOCAL = ''
 APPDIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'ChromeServerWizard')
 os.makedirs(APPDIR, exist_ok=True)
 SF = os.path.join(APPDIR, 'state.json')
-ST = {'mail': '', 'ip': '', 'key': '', 'link': '', 'pw': '', 'ad_id': '', 'step': '0', 'done': ''}
+ST = {'mail': '', 'ip': '', 'key': '', 'link': '', 'pw': '', 'ad_id': '', 'step': '0', 'done': '', 'ver': ''}
 try:
     ST.update(json.load(open(SF, encoding='utf-8')))
 except Exception:
     pass
+if ST.get('ver') != '3':
+    ST['step'], ST['done'], ST['ver'] = '0', '', '3'
 if not ST['pw']:
     ST['pw'] = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(14))
 NW = 0x08000000 if os.name == 'nt' else 0
 J = {'lines': [], 'running': False, 'code': None}
 LAST = {'ping': 0}
-
-HINTS = {
-    1: ('חשבון Oracle', ['לחץ Start for free', 'אזור: Frankfurt או Amsterdam', 'כרטיס אשראי לאימות בלבד, ללא חיוב']),
-    3: ('יצירת שרת', ['Create instance · שם: chrome', 'Image: Ubuntu 22.04 (לא Minimal)', 'Shape: Ampere · A1.Flex · 4 OCPU · 24GB',
-                      'SSH keys: Generate + Save private key', 'בסיום: העתק את ה-Public IP']),
-    5: ('קישור AnyDesk', ['בחר DEB · ARM 64-bit', 'קליק ימני > Copy link address']),
-    6: ('הורדת AnyDesk', ['לחץ Download Now', 'לאחר ההורדה: חזרה לאשף']),
-}
-OVERLAY = r"""(function(){var C=__CFG__;
-function h(t,s,x,p){var e=document.createElement(t);for(var k in s)e.style[k]=s[k];if(x)e.textContent=x;if(p)p.appendChild(e);return e}
-function add(){if(document.getElementById('__wz')||!document.documentElement)return;
-var bar=h('div',{position:'fixed',top:'0',left:'0',right:'0',height:'52px',background:'#fff',borderBottom:'1px solid #e2e8f0',zIndex:'2147483647',display:'flex',alignItems:'center',gap:'8px',padding:'0 16px',direction:'rtl',font:'600 15px Segoe UI,Arial',color:'#0f172a',boxShadow:'0 1px 3px #0f172a14'});bar.id='__wz';
-h('span',{},C.title,bar);h('span',{flex:'1'},'',bar);
-function b(t,f,p){var x=h('button',{border:p?'0':'1px solid #e2e8f0',borderRadius:'8px',padding:p?'8px 22px':'6px 12px',background:p?'#0f766e':'#fff',color:p?'#fff':'#334155',cursor:'pointer',font:'600 14px Segoe UI,Arial'},t,bar);x.onclick=f}
-b('→',function(){history.back()});b('←',function(){history.forward()});b('⟳',function(){location.reload()});
-b('מייל',function(){window.__wzcmd='mail'});b('Oracle',function(){location.href=C.oracle});b('הדבק קישור',function(){function go(t){t=(t||'').trim();if(/^https:\\/\\/\\S+$/.test(t)){location.href=t;return 1}}function ask(){go(prompt('הדבק כאן את הקישור מהמייל'))}try{navigator.clipboard.readText().then(function(t){if(!go(t))ask()},ask)}catch(e){ask()}});b('חזרה',function(){location.href=C.back});b('סיימתי',function(){location.href=C.next},1);
-document.documentElement.appendChild(bar);document.documentElement.style.marginTop='52px';
-if(C.hints.length){var c=h('div',{position:'fixed',bottom:'20px',right:'20px',maxWidth:'320px',background:'#fff',color:'#0f172a',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'14px 18px 14px 34px',zIndex:'2147483647',direction:'rtl',font:'14px/1.9 Segoe UI,Arial',boxShadow:'0 8px 24px #0f172a22'});c.id='__wh';
-var x=h('div',{position:'absolute',top:'8px',left:'12px',cursor:'pointer',color:'#64748b'},'✕',c);x.onclick=function(){c.remove()};
-C.hints.forEach(function(t){h('div',{},'– '+t,c)});document.documentElement.appendChild(c)}}
-if(!window.__wzi){window.__wzi=1;document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(a)a.target='_self'},true);var wo=window.open;window.open=function(u){if(u){location.href=u;return null}return wo.apply(window,arguments)};add();setInterval(function(){if(!document.getElementById('__wz'))add()},1500)}})();"""
 
 
 def save():
@@ -226,30 +205,6 @@ def launch_ad():
     return ''
 
 
-def on_loaded():
-    try:
-        u = W['main'].get_current_url() or ''
-    except Exception:
-        return
-    if not u.startswith('http') or u.startswith(LOCAL):
-        return
-    host = urlparse(u).netloc.lower()
-    if 'oracle' in host:
-        BR['oracle'] = u
-    st = BR['step']
-    if any(k in host for k in MAILH):
-        t, hints = 'המייל שלך', []
-    else:
-        t, hints = HINTS.get(st, ('', []))
-    back = LOCAL + '?step=%d' % st
-    cfg = {'title': t, 'hints': hints, 'back': back, 'next': back if st == 5 else LOCAL + '?step=%d&done=%d' % (st + 1, st),
-           'mail': ST['mail'] or 'https://mail.google.com/', 'oracle': BR['oracle'] or 'https://signup.cloud.oracle.com/'}
-    try:
-        W['main'].evaluate_js(OVERLAY.replace('__CFG__', json.dumps(cfg, ensure_ascii=False)))
-    except Exception:
-        pass
-
-
 def clip():
     try:
         import tkinter as tk
@@ -337,17 +292,39 @@ def unwrap_link(t):
     return t
 
 
-def to_front():
+def front(w):
     try:
-        W['main'].restore()
-        W['main'].on_top = True
-        W['main'].on_top = False
+        w.restore()
+        w.on_top = True
+        w.on_top = False
     except Exception:
         pass
 
 
+def web_closed():
+    W['web'] = None
+
+
+def open_web(url, title='Oracle'):
+    """פותח את הקישור בחלון נפרד, והאשף נשאר פתוח."""
+    if not (webview and W['main']):
+        webbrowser.open(url)
+        return 0
+    if W['web']:
+        try:
+            W['web'].load_url(url)
+            front(W['web'])
+            return 1
+        except Exception:
+            W['web'] = None
+    w = webview.create_window(title, url, width=1100, height=850)
+    w.events.closed += web_closed
+    W['web'] = w
+    return 1
+
+
 def clip_watch():
-    """כשמעתיקים קישור של Oracle מהמייל, הוא נפתח אוטומטית בחלון התוכנה."""
+    """כשמעתיקים קישור של Oracle מהמייל, הוא נפתח אוטומטית בחלון נפרד."""
     try:
         last = clip_fast().strip()
     except Exception:
@@ -362,22 +339,8 @@ def clip_watch():
             if not re.match(r'^https://\S+$', t):
                 continue
             t = unwrap_link(t)
-            if 'oracle' in urlparse(t).netloc.lower() and W['main']:
-                BR['step'] = 1
-                W['main'].load_url(t)
-                to_front()
-        except Exception:
-            pass
-
-
-def cmd_poll():
-    """מאזין לפקודות מהסרגל העליון שבתוך החלון (למשל כפתור 'מייל')."""
-    while True:
-        time.sleep(0.7)
-        try:
-            c = W['main'].evaluate_js("(function(){var c=window.__wzcmd||'';window.__wzcmd='';return c})()")
-            if c == 'mail':
-                open_chrome_profiles()
+            if 'oracle' in urlparse(t).netloc.lower():
+                open_web(t)
         except Exception:
             pass
 
@@ -424,14 +387,10 @@ class H(BaseHTTPRequestHandler):
             url = str(d.get('url', ''))
             if not url.startswith('https://'):
                 return self.send({})
-            BR['step'] = int(d.get('step', 0))
             if d.get('external'):
                 webbrowser.open(url)
                 return self.send({'embedded': 0})
-            if webview and W['main']:
-                return self.send({'embedded': 1})
-            webbrowser.open(url)
-            return self.send({'embedded': 0})
+            return self.send({'embedded': open_web(url)})
         if p == '/api/chrome':
             open_chrome_profiles()
             return self.send({'ok': 1})
@@ -477,10 +436,8 @@ def main():
             pass
         w = webview.create_window('כרום על שרת חינמי', LOCAL, width=1200, height=850, min_size=(900, 650))
         W['main'] = w
-        w.events.loaded += on_loaded
         w.events.closed += lambda: os._exit(0)
         threading.Thread(target=clip_watch, daemon=True).start()
-        threading.Thread(target=cmd_poll, daemon=True).start()
         try:
             webview.start(user_agent=UA, private_mode=False, storage_path=os.path.join(APPDIR, 'webview'))
         except TypeError:
@@ -530,6 +487,7 @@ h2{margin:0 0 10px;font-size:34px;font-weight:700;letter-spacing:-.3px}.sub{font
 .bar{height:4px;background:var(--bd);border-radius:2px;margin-bottom:18px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ac);width:0;transition:.5s}
 .cred{border:1px solid var(--bd);border-radius:12px;background:#fff;margin-top:26px}.cred div{display:flex;align-items:center;gap:12px;padding:12px 16px;font-size:15px}.cred div+div{border-top:1px solid var(--bd)}
 .cred span{color:var(--mu);width:60px}.cred b{flex:1;direction:ltr;text-align:left;font-family:Consolas,monospace;font-weight:500}
+ul.ht{margin:0 0 22px;padding:0 20px;color:var(--mu);line-height:1.9;font-size:15px}
 details{margin-top:14px;font-size:14px;color:var(--mu)}.log{background:#0f172a;color:#cbd5e1;direction:ltr;text-align:left;padding:12px;border-radius:10px;height:150px;overflow:auto;font:12px Consolas,monospace;white-space:pre-wrap}
 .foot{display:flex;justify-content:space-between;align-items:center;padding:16px 72px;border-top:1px solid var(--bd);background:#fff}
 .foot button{border:0;background:none;font:600 15px inherit;font-family:inherit;color:var(--mu);cursor:pointer;padding:8px 4px}.foot button:hover{color:var(--tx)}.foot .nx{color:var(--ac)}.foot div{display:flex;gap:26px}
@@ -541,25 +499,27 @@ details{margin-top:14px;font-size:14px;color:var(--mu)}.log{background:#0f172a;c
 const $=s=>document.querySelector(s),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const api=(p,b)=>fetch('/api/'+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
-let S={mail:'',ip:'',key:'',link:'',pw:'',ad_id:'',step:'0',done:''},cur=0,D=new Set(),busy=false,LOG='',PR={},MSG='',NL=false,FK=false;
+let S={mail:'',ip:'',key:'',link:'',pw:'',ad_id:'',step:'0',done:'',ver:''},cur=0,D=new Set(),busy=false,LOG='',PR={},MSG='',NL=false,FK=false;
 const IT=['שולחן עבודה','דפדפן','מסך וירטואלי','AnyDesk','הפעלה מחדש','קוד וסיסמה'];
 const FUNS=['','מתקין שולחן עבודה…','מתקין דפדפן…','מגדיר מסך וירטואלי…','מתקין AnyDesk…','ממתין לאתחול השרת…','מגדיר קוד וסיסמה…'];
+const HT={1:['לחץ Start for free','אזור: Frankfurt או Amsterdam','כרטיס אשראי לאימות בלבד, ללא חיוב'],3:['Create instance · שם: chrome','Image: Ubuntu 22.04 (לא Minimal)','Shape: Ampere · A1.Flex · 4 OCPU · 24GB','SSH keys: Generate + Save private key','בסיום: העתק את ה-Public IP'],5:['בחר DEB · ARM 64-bit','קליק ימני > Copy link address'],6:['לחץ Download Now','לאחר ההורדה: חזרה לאשף']};
+const hints=n=>HT[n]?`<ul class="ht">${HT[n].map(x=>`<li>${x}</li>`).join('')}</ul>`:'';
 const bb=(st,u,l,c)=>`<button class="btn ${c||''}" onclick="browse(${st},'${u}')">${l}</button> <button class="btn alt" onclick="browseExt(${st},'${u}')">בדפדפן הרגיל</button>`;
 const cred=a=>`<div class="cred">${a.map(([l,v])=>`<div><span>${l}</span><b>${esc(v||'—')}</b>${v?`<button class="cp" onclick="navigator.clipboard.writeText('${esc(v)}')">העתק</button>`:''}</div>`).join('')}</div>`;
 const chk=()=>IT.map((t,i)=>`<li class="${PR[i+1]||''}"><i></i>${t}</li>`).join('');
 const STEPS=[
 {t:'התחלה',h:()=>`<p class="sub">הקמת כרום על שרת חינמי. כ-20 דקות.</p><button class="btn" onclick="nxt()">התחל</button>`},
-{t:'חשבון Oracle',h:()=>`<p class="sub">פתיחת חשבון חינמי ב-Oracle.</p><button class="btn" onclick="browse(1,'https://signup.cloud.oracle.com/?source=:ow:o:p:feb:0916FreePageBannerButton&amp;intcmp=:ow:o:p:feb:0916FreePageBannerButton')">פתח את Oracle</button>`},
+{t:'חשבון Oracle',h:()=>`<p class="sub">פתיחת חשבון חינמי ב-Oracle. החלון נפתח בנפרד והאשף נשאר פתוח.</p>${hints(1)}${bb(1,'https://signup.cloud.oracle.com/?source=:ow:o:p:feb:0916FreePageBannerButton&amp;intcmp=:ow:o:p:feb:0916FreePageBannerButton','פתח את Oracle')}<div class="msg" id="fun" style="margin-top:14px">${MSG}</div>`},
 {t:'מייל',h:()=>`<p class="sub">Oracle שולחת קישור למייל. פתח את כרום, בחר פרופיל והיכנס למייל. כשתעתיק את הקישור (קליק ימני &gt; העתק כתובת קישור) הוא ייפתח כאן בתוכנה אוטומטית.</p><div class="row"><button class="btn" onclick="openMail()">פתח את כרום</button><button class="btn alt" onclick="pasteOpen()">הדבק ופתח</button></div><div class="msg" id="fun" style="margin-top:14px">${MSG}</div>`},
-{t:'יצירת שרת',h:()=>`<p class="sub">יצירת שרת בקונסולת Oracle.</p>${bb(3,'https://cloud.oracle.com/compute/instances','פתח את הקונסולה')}`},
+{t:'יצירת שרת',h:()=>`<p class="sub">יצירת שרת בקונסולת Oracle.</p>${hints(3)}${bb(3,'https://cloud.oracle.com/compute/instances','פתח את הקונסולה')}<div class="msg" id="fun" style="margin-top:14px">${MSG}</div>`},
 {t:'פרטי השרת',h:()=>`<p class="sub">הזן את כתובת ה-IP של השרת.</p>
 <input class="in" value="${esc(S.ip)}" placeholder="130.61.10.20" oninput="S.ip=this.value.trim()">
 <div class="kr"><span>${S.key?esc(S.key.split(/[\\/]/).pop()):'קובץ מפתח: לא נמצא'}</span><button onclick="pick()">${S.key?'החלף':'בחר'}</button></div>
 <div class="msg" id="fun">${MSG}</div><button class="btn act" onclick="run('connect')">בדוק חיבור</button>`},
 {t:'התקנה',h:()=>`<p class="sub">ההתקנה רצה אוטומטית ולוקחת כמה דקות.</p><div class="bar"><i id="bar" style="width:${pct()}%"></i></div><ul class="chk" id="chk">${chk()}</ul><div class="msg" id="fun">${MSG}</div>
-${NL?`<p class="sub" style="margin-bottom:12px">לא נמצא קישור אוטומטי. הדבק קישור DEB (ARM 64-bit).</p><input class="in" style="margin-bottom:14px" value="${esc(S.link)}" placeholder="https://download.anydesk.com/..." oninput="S.link=this.value.trim()">${bb(5,'https://anydesk.com/en/downloads/linux','פתח את AnyDesk','alt')}<br><br>`:''}
+${NL?`<p class="sub" style="margin-bottom:12px">לא נמצא קישור אוטומטי. הדבק קישור DEB (ARM 64-bit).</p><input class="in" style="margin-bottom:14px" value="${esc(S.link)}" placeholder="https://download.anydesk.com/..." oninput="S.link=this.value.trim()">${bb(5,'https://anydesk.com/en/downloads/linux','פתח את AnyDesk','alt')}<br><br>`:''}${NL?hints(5):''}
 <button class="btn act" onclick="run('all')">${busy?'מתקין…':'התחל התקנה'}</button><details><summary>פרטים טכניים</summary><pre class="log" id="lg">${esc(LOG)}</pre></details>`},
-{t:'חיבור',h:()=>`<p class="sub">הורד את AnyDesk והתחבר לשרת.</p><div class="row">${bb(6,'https://anydesk.com/en/downloads/windows','הורד AnyDesk','alt')}<button class="btn act" onclick="launch()">התחבר לשרת</button></div><div class="msg" id="fun" style="margin-top:14px">${MSG}</div>${cred([['ID',S.ad_id],['סיסמה',S.pw]])}`},
+{t:'חיבור',h:()=>`<p class="sub">הורד את AnyDesk והתחבר לשרת.</p>${hints(6)}<div class="row">${bb(6,'https://anydesk.com/en/downloads/windows','הורד AnyDesk','alt')}<button class="btn act" onclick="launch()">התחבר לשרת</button></div><div class="msg" id="fun" style="margin-top:14px">${MSG}</div>${cred([['ID',S.ad_id],['סיסמה',S.pw]])}`},
 {t:'סיום',h:()=>`<p class="sub">בשרת: תפריט יישומים &gt; Internet &gt; Chromium. הגלישה יוצאת מ-Oracle.</p><button class="btn" onclick="launch()">התחבר לשרת</button><div class="msg" id="fun" style="margin-top:14px">${MSG}</div>${cred([['IP',S.ip],['ID',S.ad_id],['סיסמה',S.pw]])}`}];
 const pct=()=>Math.round(Object.values(PR).filter(x=>x=='ok').length/6*100);
 function render(){
@@ -572,9 +532,9 @@ function render(){
 function upd(){const c=$('#chk'),f=$('#fun'),l=$('#lg'),b=$('#bar');if(c)c.innerHTML=chk();if(f)f.textContent=MSG;if(b)b.style.width=pct()+'%';if(l){l.textContent=LOG;l.scrollTop=l.scrollHeight}}
 const save=()=>{S.step=cur;S.done=[...D].join(',');return api('state',S)};
 function go(i){if(i<0||i>=STEPS.length)return;save();cur=i;MSG='';render()}
-function nxt(){if((cur==4||cur==5)&&!D.has(cur)&&!confirm('השלב עוד לא הושלם. להמשיך בכל זאת?'))return;D.add(cur);go(cur+1)}
-async function browse(st,url){S.step=st;cur=st;await save();const r=await api('browse',{url,step:st});if(r.embedded)location.href=url}
-async function browseExt(st,url){S.step=st;cur=st;await save();await api('browse',{url,step:st,external:1});MSG='נפתח בדפדפן הרגיל. בסיום חזור לכאן ולחץ הבא';render()}
+function nxt(){D.add(cur);go(cur+1)}
+async function browse(st,url){await save();await api('browse',{url,step:st});MSG='נפתח חלון נפרד. בסיום חזור לכאן ולחץ הבא';render()}
+async function browseExt(st,url){await save();await api('browse',{url,step:st,external:1});MSG='נפתח בדפדפן הרגיל. בסיום חזור לכאן ולחץ הבא';render()}
 async function openMail(){await api('chrome');MSG='נפתח בורר הפרופילים בכרום';render()}
 async function pasteOpen(){const r=await api('clip'),u=(r.text||'').trim();if(!/^https:\/\/\S+$/.test(u)){MSG='לא נמצא קישור בלוח. העתק את הקישור מהמייל ונסה שוב';render();return}await browse(1,u)}
 async function pick(){const r=await api('pick');if(r.path){S.key=r.path;await save();render()}}
